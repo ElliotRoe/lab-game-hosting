@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lab WebGL Uploader</title>
+    <link
+      href="https://releases.transloadit.com/uppy/v3.2.1/uppy.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2em;
+      }
+      #password-section,
+      #uploader-section {
+        margin-bottom: 1em;
+      }
+      #drag-drop-area {
+        border: 2px dashed #ccc;
+        padding: 1em;
+      }
+      #uploader-section {
+        display: none;
+      } /* Hidden by default */
+      /* Style Uppy Dashboard */
+      .uppy-Dashboard {
+        border: 1px solid #eee;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Upload Unity WebGL Build</h1>
+
+    <div id="password-section">
+      <label for="upload-password">Enter upload password:</label>
+      <input
+        type="password"
+        id="upload-password"
+        placeholder="Password"
+        required
+      />
+      <button id="password-submit">Unlock Uploader</button>
+    </div>
+
+    <div id="uploader-section">
+      <p>
+        Drag & drop your Unity WebGL build folder or select the core files
+        (including index.html, Build/, TemplateData/).
+      </p>
+      <div id="drag-drop-area"></div>
+      <div
+        id="upload-log"
+        style="margin-top: 1em; font-family: monospace; white-space: pre-wrap"
+      ></div>
+    </div>
+
+    <script
+      src="https://releases.transloadit.com/uppy/v3.2.1/uppy.min.js"
+      type="module"
+    ></script>
+    <script src="/main.js" type="module"></script>
+  </body>
+</html>
