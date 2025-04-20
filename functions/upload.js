@@ -123,9 +123,3 @@ export async function onRequestOptions(context) {
     },
   });
 }
-
-// Optional: Default handler for other methods or root path if placed at /functions/index.js
-// export async function onRequest(context) {
-//    // Default response or handle GET requests differently
-//    return new Response("Function endpoint is active. Use POST for uploads.", { status: 200 });
-// }
