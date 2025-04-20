@@ -196,7 +196,7 @@
 		});
 	}
 
-	$: if (uploadPassword && gameName && uppyInstance) {
+	$: if (uppyInstance) {
 		uppyInstance.setMeta({ uploadPassword, gameName });
 	}
 
@@ -204,6 +204,7 @@
 	function handlePasswordSubmit() {
 		isValidatingPassword = true;
 		uploadPassword = passwordInput.value;
+		gameName = gameNameInput.value;
 		if (!uploadPassword) {
 			toast.error('Please enter the upload password.');
 			isValidatingPassword = false;
@@ -278,14 +279,17 @@
 					action: {
 						label: 'Upload',
 						onClick: () => {
+							// Ensure meta is set right before upload
+							if (uppyInstance) {
+								uppyInstance.setMeta({ uploadPassword, gameName });
+							}
 							logMessage('User confirmed. Starting upload...');
 							uppyInstance.upload();
 						}
 					},
-					description: 'Click Upload to proceed or dismiss to cancel.'
+					duration: 10000
 				}
 			);
-			return;
 		} else {
 			// If validation fails
 			toast.error(
