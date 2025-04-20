@@ -46,5 +46,8 @@
 		"@uppy/core": "^4.4.4",
 		"@uppy/dashboard": "^4.3.3",
 		"@uppy/xhr-upload": "^4.3.3"
+	},
+	"engines": {
+		"node": ">=18.18.0"
 	}
 }
