@@ -1,5 +1,5 @@
 // Import Uppy bundle using ES Modules syntax (v4.13.3)
-import { Uppy } from "https://releases.transloadit.com/uppy/v4.13.3/uppy.min.mjs";
+import Uppy, { Dashboard, XHRUpload } from "https://releases.transloadit.com/uppy/v4.13.3/uppy.min.mjs";
 
 const passwordSection = document.getElementById("password-section");
 const uploaderSection = document.getElementById("uploader-section");
@@ -81,7 +81,7 @@ function initUppy() {
       return true; // Allow the file/folder
     },
   })
-    .use(Uppy.Dashboard, {
+    .use(Dashboard, {
       inline: true,
       target: "#drag-drop-area",
       proudlyDisplayPoweredByUppy: true,
@@ -93,7 +93,7 @@ function initUppy() {
       // Note: browser support for folder selection varies
       canSelectFolders: true,
     })
-    .use(Uppy.XHRUpload, {
+    .use(XHRUpload, {
       endpoint: "/upload", // Endpoint handled by our Cloudflare Function
       method: "POST",
       formData: false, // Send raw file body
