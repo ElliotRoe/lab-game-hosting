@@ -19,7 +19,6 @@
 	let passwordSection: HTMLElement;
 	let uploaderSection: HTMLElement;
 	let passwordInput: HTMLInputElement;
-	let uploadLog: HTMLElement;
 	let uploadPassword = '';
 	let gameName = '';
 	let uppyInstance: any = null;
@@ -28,18 +27,10 @@
 	let isGameNameValid: boolean | null = null; // null: unchecked, true: valid, false: invalid
 	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 	let gameNameError = ''; // New state for error message
-	let uppyInitialized = false; // Track Uppy initialization state
-
-	function logMessage(message: string) {
-		console.log(message);
-		if (uploadLog) {
-			uploadLog.textContent += message + '\n';
-		}
-	}
 
 	// --- WebGL Build Validation Logic ---
 	function looksLikeWebGLBuild(files: any[]) {
-		logMessage('Validating file structure...');
+		console.log('Validating file structure...');
 		const fileNames = files.map((file) => file.name || file.relativePath); // relativePath useful for folders
 
 		// Basic checks: Does it contain key files/folders?
@@ -56,23 +47,23 @@
 		);
 
 		if (!hasIndexHtml) {
-			logMessage('Validation Failed: Missing index.html');
+			toast.error('Missing index.html file');
 			return false;
 		}
 		if (!hasBuildDir) {
-			logMessage('Validation Failed: Missing Build/ directory contents');
+			toast.error('Missing Build/ directory contents');
 			return false;
 		}
 		if (!hasWasm) {
-			logMessage('Validation Failed: Missing .wasm file (usually in Build/)');
+			toast.error('Missing .wasm file (usually in Build/)');
 			return false;
 		}
 		if (!hasJsInBuild) {
-			logMessage('Validation Failed: Missing .js file in Build/');
+			toast.error('Missing .js file in Build/');
 			return false;
 		}
 
-		logMessage('Validation Passed: Structure looks like a Unity WebGL build.');
+		toast.success('File structure looks valid!');
 		return true;
 	}
 
@@ -93,12 +84,12 @@
 				// Since we only allow zip files, reject folders directly
 				if (currentFile.isFolder) {
 					toast.error('Folder uploads are not allowed. Please upload a single .zip file.');
-					logMessage(`Folder rejected: ${currentFile.name}`);
+					console.log(`Folder rejected: ${currentFile.name}`);
 					return false;
 				}
 				// The file type check is handled by restrictions.allowedFileTypes
 				// Uppy will show an error message automatically if the type is wrong.
-				logMessage(`File added: ${currentFile.name}`);
+				console.log(`File added: ${currentFile.name}`);
 				return true; // Allow the file if it passed type check
 			}
 		})
@@ -129,13 +120,7 @@
 
 		// --- Uppy Event Listeners ---
 		uppyInstance.on('files-added', (files: any[]) => {
-			logMessage(`${files.length} file(s)/folder(s) added. Running validation...`);
-			// Clear previous logs slightly delayed to allow reading them
-			setTimeout(() => {
-				if (uploadLog) {
-					uploadLog.textContent = '';
-				}
-			}, 2000);
+			console.log(`${files.length} file(s)/folder(s) added. Running validation...`);
 
 			// Extract all individual files even if a folder was added
 			const allFiles = uppyInstance.getFiles();
@@ -145,14 +130,14 @@
 		});
 
 		uppyInstance.on('upload-success', (file: any, response: any) => {
-			logMessage(`✅ Upload successful: ${file.name}`);
+			console.log(`✅ Upload successful: ${file.name}`);
 			console.log('Received upload-success response:', response.body);
 
 			// For index.html files, show the game URL more prominently
 			if (response.body.isIndexHtml) {
 				console.log('isIndexHtml is TRUE');
 				const gameUrl = `${response.body.gameUrl}index.html`;
-				logMessage(`🎮 Calculated final Game URL: ${gameUrl}`);
+				console.log(`🎮 Calculated final Game URL: ${gameUrl}`);
 
 				// Add to the game URLs list if it exists
 				const gameUrlsList = document.getElementById('game-urls-list');
@@ -183,14 +168,14 @@
 				);
 			} else {
 				console.log('isIndexHtml is FALSE or MISSING');
-				logMessage(`🔗 File URL (non-index): ${response.body.url}`);
+				console.log(`🔗 File URL (non-index): ${response.body.url}`);
 			}
 		});
 
 		uppyInstance.on('upload-error', (file: any, error: any, response: any) => {
-			logMessage(`❌ Error uploading ${file?.name || 'file'}: ${error}`);
+			console.log(`❌ Error uploading ${file?.name || 'file'}: ${error}`);
 			if (response) {
-				logMessage(`Server responded with: ${response.status} ${response.body}`);
+				console.log(`Server responded with: ${response.status} ${response.body}`);
 				toast.error(
 					`Upload Failed for ${file?.name}:\n${error}\nServer Status: ${response.status}`
 				);
@@ -200,8 +185,8 @@
 		});
 
 		uppyInstance.on('complete', (result: any) => {
-			logMessage('--- Upload process complete ---');
-			logMessage(`Successful: ${result.successful.length}, Failed: ${result.failed.length}`);
+			console.log('--- Upload process complete ---');
+			console.log(`Successful: ${result.successful.length}, Failed: ${result.failed.length}`);
 		});
 	}
 
@@ -220,7 +205,7 @@
 		}
 
 		// Validate password with the server
-		logMessage('Validating password...');
+		console.log('Validating password...');
 
 		fetch('/api/validate-password', {
 			method: 'POST',
@@ -234,14 +219,14 @@
 				if (data.valid) {
 					showUploader = true;
 				} else {
-					logMessage('Password validation failed: ' + data.message);
+					console.log('Password validation failed: ' + data.message);
 					toast.error('Invalid password. Please try again.');
 					passwordInput.value = '';
 					passwordInput.focus();
 				}
 			})
 			.catch((error) => {
-				logMessage('Error validating password: ' + error);
+				console.log('Error validating password: ' + error);
 				toast.error('Error validating password. Please try again.');
 			})
 			.finally(() => {
@@ -253,7 +238,7 @@
 		const inputElement = document.getElementById('game-name') as HTMLInputElement;
 		if (!inputElement) {
 			toast.error('Game Name input element not found.');
-			logMessage('Error: #game-name input not found in DOM.');
+			console.log('Error: #game-name input not found in DOM.');
 			gameNameError = 'Internal error: Input field missing.'; // Set error
 			isGameNameValid = false;
 			return false;
@@ -271,7 +256,7 @@
 		const sanitizedName = gameName.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
 		if (sanitizedName !== gameName) {
 			// Provide feedback about sanitization without blocking if it results in a valid name
-			logMessage(`Game name sanitized to: ${sanitizedName}`);
+			console.log(`Game name sanitized to: ${sanitizedName}`);
 			// Check if the original had invalid chars, not just case changes
 			if (gameName.toLowerCase().replace(/[^a-z0-9-_]/g, '-') !== sanitizedName) {
 				gameNameError = `Invalid characters detected. Sanitized to: ${sanitizedName}`; // Informative error
@@ -299,7 +284,7 @@
 			return;
 		}
 
-		logMessage(`Game name set to: ${gameName}`);
+		console.log(`Game name set to: ${gameName}`);
 
 		// Check if game name exists on the server
 		try {
@@ -316,7 +301,7 @@
 
 			if (data.exists) {
 				toast.error(`Game name "${gameName}" already exists. Please choose a different name.`);
-				logMessage(`Game name check failed: "${gameName}" already exists.`);
+				console.log(`Game name check failed: "${gameName}" already exists.`);
 				// Optionally focus the input again
 				const inputElement = document.getElementById('game-name') as HTMLInputElement;
 				inputElement?.focus();
@@ -331,11 +316,11 @@
 				}
 				return; // Stop the upload process
 			}
-			logMessage(`Game name "${gameName}" is available.`);
+			console.log(`Game name "${gameName}" is available.`);
 			isGameNameValid = true; // Mark as valid after check
 			gameNameError = ''; // Clear error message
 		} catch (error) {
-			logMessage(`Error checking game name: ${error}`);
+			console.log(`Error checking game name: ${error}`);
 			toast.error('Could not verify game name. Please try again.');
 			isGameNameValid = false; // Treat check errors as invalid
 			gameNameError = 'Could not verify name uniqueness.'; // Set error message
@@ -357,9 +342,9 @@
 							// Ensure meta is set right before upload
 							if (uppyInstance) {
 								uppyInstance.setMeta({ uploadPassword, gameName });
-								logMessage(`Set global meta: gameName=${gameName}`);
+								console.log(`Set global meta: gameName=${gameName}`);
 							}
-							logMessage('User confirmed. Starting upload...');
+							console.log('User confirmed. Starting upload...');
 							uppyInstance.upload();
 						}
 					},
@@ -370,10 +355,10 @@
 			// If validation fails or uppyInstance is null
 			if (files.length !== 1) {
 				toast.error('⚠️ Error: Please select exactly one .zip file to upload.');
-				logMessage('Upload aborted. Incorrect file selection.');
+				console.log('Upload aborted. Incorrect file selection.');
 			} else {
 				toast.error('⚠️ Error: Uppy instance not ready.');
-				logMessage('Upload aborted. Uppy not initialized.');
+				console.log('Upload aborted. Uppy not initialized.');
 			}
 			if (uppyInstance) {
 				uppyInstance.reset(); // Clear the selected files
@@ -389,7 +374,7 @@
 			return;
 		}
 
-		logMessage(`Checking uniqueness for: ${currentName}...`);
+		console.log(`Checking uniqueness for: ${currentName}...`);
 		try {
 			const response = await fetch('/api/check-game-name', {
 				method: 'POST',
@@ -404,17 +389,17 @@
 
 			if (data.exists) {
 				isGameNameValid = false;
-				logMessage(`Game name "${currentName}" is NOT available.`);
+				console.log(`Game name "${currentName}" is NOT available.`);
 				toast.error(`"${currentName}" is already taken.`, { duration: 2000 });
 				gameNameError = 'This game name is already taken.'; // Set error message
 			} else {
 				isGameNameValid = true;
-				logMessage(`Game name "${currentName}" is available.`);
+				console.log(`Game name "${currentName}" is available.`);
 				gameNameError = ''; // Clear error message
 				// Optional: show temporary success indicator?
 			}
 		} catch (error) {
-			logMessage(`Error checking game name uniqueness: ${error}`);
+			console.log(`Error checking game name uniqueness: ${error}`);
 			toast.error('Could not verify game name uniqueness.');
 			isGameNameValid = null; // Set to null on error, as we don't know the status
 			gameNameError = 'Error checking name uniqueness.'; // Set error message
@@ -446,24 +431,35 @@
 	}
 
 	// --- Reactive Uppy Initialization ---
-	$: if (showUploader && isGameNameValid === true && !uppyInitialized) {
+	$: if (showUploader && isGameNameValid === true) {
 		// Wait a tick just to be absolutely sure DOM is ready for Uppy target
 		tick().then(() => {
-			if (showUploader && isGameNameValid === true && !uppyInitialized) {
-				// Double check state after tick
-				logMessage('Conditions met, initializing Uppy...');
+			// Double check state after tick, ensure DOM element exists
+			if (showUploader && isGameNameValid === true && document.getElementById('drag-drop-area')) {
+				console.log('Conditions met (isGameNameValid=true), ensuring Uppy is initialized...');
 				initUppy();
-				uppyInitialized = true;
+			} else if (showUploader && isGameNameValid === true) {
+				console.log(
+					'Conditions met (isGameNameValid=true), but #drag-drop-area not found in DOM after tick.'
+				);
 			}
 		});
 	}
 
-	// --- Reactive Uppy Cleanup ---
-	$: if (!showUploader && uppyInstance) {
-		logMessage('Hiding uploader, closing Uppy instance.');
+	// --- Reactive Uppy Handling for Invalid Name ---
+	$: if (showUploader && isGameNameValid !== true && uppyInstance) {
+		console.log(
+			`Game name is no longer valid (isGameNameValid=${isGameNameValid}), closing Uppy instance.`
+		);
 		uppyInstance.close();
 		uppyInstance = null;
-		uppyInitialized = false; // Reset state
+	}
+
+	// --- Reactive Uppy Cleanup (when hiding the whole uploader section) ---
+	$: if (!showUploader && uppyInstance) {
+		console.log('Hiding uploader section, closing Uppy instance.');
+		uppyInstance.close();
+		uppyInstance = null;
 		isGameNameValid = null; // Reset game name validity
 		gameNameError = ''; // Clear game name error
 		// Optionally clear the game name input field itself
@@ -474,7 +470,6 @@
 
 	onMount(() => {
 		passwordInput = document.getElementById('upload-password') as HTMLInputElement;
-		uploadLog = document.getElementById('upload-log') as HTMLElement;
 	});
 </script>
 
@@ -555,21 +550,30 @@
 									Use letters, numbers, dashes (-), underscores (_). This determines the game's URL.
 								</p>
 							</div>
-							{#if isGameNameValid}
-								<div class="mt-4 border-t border-gray-200 pt-4">
-									<Label class="text-sm font-medium text-gray-600">WebGL Build (.zip)</Label>
-									<p class="mb-2 text-sm text-gray-600">
-										Upload a single <code class="rounded bg-gray-100 px-1">.zip</code> file containing
-										your Unity WebGL build.
-									</p>
-									<div
-										id="drag-drop-area"
-										class="rounded-lg border-2 border-dashed border-gray-300 p-6 transition-colors hover:border-blue-400"
-									>
-										<!-- Uppy Dashboard injects here -->
-									</div>
+							<div class="mt-4 border-t border-gray-200 pt-4">
+								<Label class="text-sm font-medium text-gray-600">WebGL Build (.zip)</Label>
+								<p class="mb-2 text-sm text-gray-600">
+									Upload a single <code class="rounded bg-gray-100 px-1">.zip</code> file containing
+									your Unity WebGL build.
+								</p>
+								<div
+									id="drag-drop-area"
+									class="rounded-lg border-2 border-dashed border-gray-300 p-6 transition-colors hover:border-blue-400 {isGameNameValid !==
+									true
+										? 'pointer-events-none opacity-50'
+										: ''}"
+									title={isGameNameValid !== true
+										? 'Enter a valid and unique game name first'
+										: 'Drag & drop your .zip file here or click to browse'}
+								>
+									<!-- Uppy Dashboard injects here -->
+									{#if isGameNameValid !== true}
+										<p class="text-center text-gray-500">
+											Enter a valid and unique game name above to enable upload.
+										</p>
+									{/if}
 								</div>
-							{/if}
+							</div>
 						</CardContent>
 					</Card>
 				</div>
@@ -585,17 +589,6 @@
 						<ul id="game-urls-list" class="list-disc space-y-2 pl-5">
 							<!-- Game links will be added here -->
 						</ul>
-					</CardContent>
-				</Card>
-
-				<Card class="rounded-lg border border-gray-200">
-					<CardHeader class="border-b">
-						<CardTitle class="text-xl font-semibold text-gray-700">Upload Log</CardTitle>
-					</CardHeader>
-					<CardContent class="p-0">
-						<pre
-							id="upload-log"
-							class="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800 h-48 overflow-y-auto bg-gray-900 p-4 font-mono text-sm text-green-400"></pre>
 					</CardContent>
 				</Card>
 			{/if}
