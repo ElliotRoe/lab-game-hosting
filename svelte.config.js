@@ -20,11 +20,9 @@ const config = {
 			routes: {
 				include: ['/*'],
 				exclude: ['<all>']
-			}
-		}),
-		platform: {
+			},
 			nodejs_compat: true
-		}
+		})
 	}
 };
 
