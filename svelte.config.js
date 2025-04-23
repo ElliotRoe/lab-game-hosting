@@ -21,7 +21,10 @@ const config = {
 				include: ['/*'],
 				exclude: ['<all>']
 			}
-		})
+		}),
+		platform: {
+			nodejs_compat: true
+		}
 	}
 };
 
