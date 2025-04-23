@@ -6,7 +6,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3'; // S3Client is imported f
 // Buffer no longer needed for fflate/S3 Body
 // import { Buffer } from 'buffer';
 import { unzipSync } from 'fflate'; // Import fflate unzipSync
-import { lookup } from 'mime-types'; // Import mime-types lookup
+// import { lookup } from 'mime-types'; // No longer using mime-types
 import { s3Client, R2_BUCKET_NAME } from '$lib/server/r2'; // Import shared client
 
 // Environment variables needed:
@@ -36,6 +36,25 @@ const bucketName = R2_BUCKET_NAME;
 if (!bucketName) {
 	// If R2_BUCKET_NAME check wasn't done in r2.ts, do it here or handle error
 	throw new Error('Missing required environment variable: R2_BUCKET_NAME');
+}
+
+// --- Helper Function for Content Type ---
+function getContentType(filename: string): string {
+	const lowerFilename = filename.toLowerCase();
+	if (lowerFilename.endsWith('.html')) return 'text/html';
+	if (lowerFilename.endsWith('.css')) return 'text/css';
+	if (lowerFilename.endsWith('.js')) return 'application/javascript';
+	if (lowerFilename.endsWith('.json')) return 'application/json';
+	if (lowerFilename.endsWith('.wasm')) return 'application/wasm';
+	if (lowerFilename.endsWith('.data')) return 'application/octet-stream'; // Common for Unity data files
+	if (lowerFilename.endsWith('.unityweb')) return 'application/octet-stream'; // Unity binary format
+	if (lowerFilename.endsWith('.png')) return 'image/png';
+	if (lowerFilename.endsWith('.jpg') || lowerFilename.endsWith('.jpeg')) return 'image/jpeg';
+	if (lowerFilename.endsWith('.svg')) return 'image/svg+xml';
+	if (lowerFilename.endsWith('.gif')) return 'image/gif';
+	if (lowerFilename.endsWith('.ico')) return 'image/x-icon';
+	// Add more types as needed
+	return 'application/octet-stream'; // Default
 }
 
 export const POST = async ({ request }: RequestEvent) => {
@@ -174,8 +193,8 @@ export const POST = async ({ request }: RequestEvent) => {
 			const fullPath = `${safeGameName}/${safeEntryPath}`;
 			const entryData = entry.data; // Already a Uint8Array
 
-			// Determine Content-Type
-			const contentType = lookup(relativePath) || 'application/octet-stream';
+			// Determine Content-Type using the helper function
+			const contentType = getContentType(relativePath);
 
 			// Check if this is the index.html at the *effective* root
 			if (relativePath.toLowerCase() === 'index.html') {
