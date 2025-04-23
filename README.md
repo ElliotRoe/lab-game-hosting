@@ -11,7 +11,17 @@ A Svelte-based web application for uploading and hosting Unity WebGL game builds
 - Modern UI with Tailwind CSS
 - TypeScript for type safety
 
+## Project Structure
+
+- `src/` - SvelteKit frontend application
+- `modal/` - Modal serverless backend functions
+  - Handles large file uploads (up to 4GB)
+  - Processes and stores game files in Cloudflare R2
+  - See `modal/README.md` for setup instructions
+
 ## Development
+
+### Frontend (SvelteKit)
 
 ```bash
 # Install dependencies
@@ -27,14 +37,32 @@ npm run build
 npm run preview
 ```
 
+### Backend (Modal)
+
+```bash
+cd modal
+pip install modal
+modal serve upload.py
+```
+
+See `modal/README.md` for complete Modal setup instructions.
+
 ## Deployment
 
-This project is designed to be deployed to Cloudflare Pages with the following environment variables:
+### Frontend
 
-- `UPLOAD_PASSWORD`: The secret password required for uploads
-- `R2_BUCKET`: Binding to the R2 bucket
-- `R2_ACCOUNT_ID`: Cloudflare Account ID (used for URL construction if needed)
-- `R2_PUBLIC_ORIGIN`: Optional - Preferred public URL base for R2 bucket
+Deploy to Cloudflare Pages as usual.
+
+### Backend
+
+Deploy the Modal functions:
+
+```bash
+cd modal
+modal deploy upload.py
+```
+
+Update the frontend environment variables to point to your Modal endpoint.
 
 ## How It Works
 

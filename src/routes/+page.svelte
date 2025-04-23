@@ -27,6 +27,7 @@
 	let isGameNameValid: boolean | null = null; // null: unchecked, true: valid, false: invalid
 	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 	let gameNameError = ''; // New state for error message
+	let showProcessingNotice = false; // State for the processing notice
 
 	// --- WebGL Build Validation Logic ---
 	function looksLikeWebGLBuild(files: any[]) {
@@ -107,39 +108,62 @@
 				canSelectFolders: false // Disable folder selection as we only accept zips
 			})
 			.use(XHRUpload, {
-				endpoint: '/api/upload', // Endpoint handled by our SvelteKit API route
+				endpoint: 'https://elliotroe--game-upload-upload.modal.run',
 				method: 'POST',
-				formData: true, // Send as FormData
-				fieldName: 'gameZip', // Match the expected field name on the server
-				limit: 1, // Upload one file at a time
-				headers: {
-					// Password will be added here dynamically just before upload
+				formData: true,
+				fieldName: 'gameZip',
+				limit: 1,
+				// Send metadata as headers using a function
+				headers: () => {
+					console.log(`Generating XHR headers: gameName=${gameName}, pw set=${!!uploadPassword}`);
+					return {
+						'X-Upload-Password': uploadPassword,
+						'X-Game-Name': gameName
+					};
 				},
-				allowedMetaFields: ['name', 'uploadPassword', 'gameName'] // Ensure custom fields are sent
+				allowedMetaFields: ['name'] // Only need name now
 			});
 
 		// --- Uppy Event Listeners ---
-		uppyInstance.on('files-added', (files: any[]) => {
-			console.log(`${files.length} file(s)/folder(s) added. Running validation...`);
 
+		uppyInstance.on('files-added', (files: any[]) => {
+			console.log(`${files.length} file(s) added. Triggering validation flow...`);
 			// Extract all individual files even if a folder was added
 			const allFiles = uppyInstance.getFiles();
+			// Don't start upload immediately, wait for user confirmation
+			// startUpload(allFiles); // Moved logic into confirmation step
+			if (allFiles.length === 1) {
+				// Trigger the pre-upload checks and confirmation toast
+				startUpload(allFiles);
+			} else if (allFiles.length > 1) {
+				toast.error('Please upload only one .zip file at a time.');
+				uppyInstance.reset();
+			}
+		});
 
-			// Start validation and upload process
-			startUpload(allFiles);
+		// Added progress listener for the notice
+		uppyInstance.on('progress', (progress: { bytesUploaded: number; bytesTotal: number }) => {
+			if (progress.bytesUploaded === progress.bytesTotal && progress.bytesTotal > 0) {
+				console.log('Upload reached 100%, showing processing notice.');
+				showProcessingNotice = true;
+			} else {
+				// Hide notice if progress resets or goes below 100 (e.g., during retry)
+				if (showProcessingNotice && progress.bytesUploaded < progress.bytesTotal) {
+					showProcessingNotice = false;
+				}
+			}
 		});
 
 		uppyInstance.on('upload-success', (file: any, response: any) => {
+			showProcessingNotice = false; // Hide notice on success
 			console.log(`✅ Upload successful: ${file.name}`);
-			console.log('Received upload-success response:', response.body);
+			// Ensure response.body exists and has expected fields
+			if (response && response.body && response.body.gameUrl) {
+				console.log('Received upload-success response:', response.body);
+				const gameUrl = response.body.gameUrl; // Direct URL from Modal
+				console.log(`🎮 Game URL from server: ${gameUrl}`);
 
-			// For index.html files, show the game URL more prominently
-			if (response.body.isIndexHtml) {
-				console.log('isIndexHtml is TRUE');
-				const gameUrl = `${response.body.gameUrl}index.html`;
-				console.log(`🎮 Calculated final Game URL: ${gameUrl}`);
-
-				// Add to the game URLs list if it exists
+				// Add to the game URLs list
 				const gameUrlsList = document.getElementById('game-urls-list');
 				if (gameUrlsList) {
 					const listItem = document.createElement('li');
@@ -149,7 +173,7 @@
 					gameLink.href = gameUrl;
 					gameLink.target = '_blank';
 					gameLink.className = 'text-blue-600 hover:underline';
-					gameLink.textContent = `${response.body.gameName} - ${new Date().toLocaleString()}`;
+					gameLink.textContent = `${response.body.gameName || file.meta.name} - ${new Date().toLocaleString()}`;
 
 					listItem.appendChild(gameLink);
 					gameUrlsList.appendChild(listItem);
@@ -164,15 +188,16 @@
 				}
 
 				toast.success(
-					`✅ Game Upload Successful!\n\nGame: ${response.body.gameName}\nURL: ${gameUrl}\n\nYou can access your game at the URL above.`
+					`✅ Game Upload Successful!\n\nGame: ${response.body.gameName || file.meta.name}\nURL: ${gameUrl}`
 				);
 			} else {
-				console.log('isIndexHtml is FALSE or MISSING');
-				console.log(`🔗 File URL (non-index): ${response.body.url}`);
+				console.error('Upload success response missing body or gameUrl:', response);
+				toast.error(`Upload OK for ${file?.name}, but couldn't get game URL.`);
 			}
 		});
 
 		uppyInstance.on('upload-error', (file: any, error: any, response: any) => {
+			showProcessingNotice = false; // Hide notice on error
 			console.log(`❌ Error uploading ${file?.name || 'file'}: ${error}`);
 			if (response) {
 				console.log(`Server responded with: ${response.status} ${response.body}`);
@@ -184,14 +209,19 @@
 			}
 		});
 
+		uppyInstance.on('cancel-all', () => {
+			showProcessingNotice = false; // Hide notice on cancel
+		});
+
+		uppyInstance.on('reset', () => {
+			showProcessingNotice = false; // Hide notice on reset
+		});
+
 		uppyInstance.on('complete', (result: any) => {
+			showProcessingNotice = false; // Hide notice on completion (covers success/error)
 			console.log('--- Upload process complete ---');
 			console.log(`Successful: ${result.successful.length}, Failed: ${result.failed.length}`);
 		});
-	}
-
-	$: if (uppyInstance) {
-		uppyInstance.setMeta({ uploadPassword, gameName });
 	}
 
 	// --- Password Handling ---
@@ -341,7 +371,6 @@
 							// Meta is already set on the file
 							// Ensure meta is set right before upload
 							if (uppyInstance) {
-								uppyInstance.setMeta({ uploadPassword, gameName });
 								console.log(`Set global meta: gameName=${gameName}`);
 							}
 							console.log('User confirmed. Starting upload...');
@@ -573,6 +602,16 @@
 										</p>
 									{/if}
 								</div>
+								<!-- Processing Notice -->
+								{#if showProcessingNotice}
+									<div
+										class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-center text-sm text-amber-800"
+									>
+										<p class="font-medium">Upload complete, processing on server...</p>
+										<p>This may take a minute or two for large files. Please wait.</p>
+										<p>Do not retry unless it takes longer than 2 minutes.</p>
+									</div>
+								{/if}
 							</div>
 						</CardContent>
 					</Card>
