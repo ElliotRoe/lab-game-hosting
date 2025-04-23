@@ -3,8 +3,9 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { PUBLIC_GAME_URL_BASE } from '$env/static/public';
 import { PutObjectCommand } from '@aws-sdk/client-s3'; // S3Client is imported from lib now
-import { Buffer } from 'buffer'; // Need Buffer for S3 Body
-import AdmZip from 'adm-zip'; // Import AdmZip
+// Buffer no longer needed for fflate/S3 Body
+// import { Buffer } from 'buffer';
+import { unzipSync } from 'fflate'; // Import fflate unzipSync
 import { lookup } from 'mime-types'; // Import mime-types lookup
 import { s3Client, R2_BUCKET_NAME } from '$lib/server/r2'; // Import shared client
 
@@ -96,22 +97,35 @@ export const POST = async ({ request }: RequestEvent) => {
 		);
 
 		// --- Read Zip Data ---
-		const fileData = await zipFile.arrayBuffer();
-		const buffer = Buffer.from(fileData);
+		// Use Uint8Array which is compatible with fflate and S3 Body
+		const zipData = new Uint8Array(await zipFile.arrayBuffer());
+		// const buffer = Buffer.from(fileData); // No longer needed
 
 		// --- Process Zip and Upload to R2 ---
-		const zip = new AdmZip(buffer);
-		const zipEntries = zip.getEntries();
-		const uploadPromises: Promise<any>[] = [];
+		let unzipped: Record<string, Uint8Array>;
+		try {
+			unzipped = unzipSync(zipData);
+		} catch (err: any) {
+			console.error('[UPLOAD] Failed to unzip file:', err);
+			return json({ error: `Failed to process zip file: ${err.message}` }, { status: 400 });
+		}
 
-		// Filter out directories and macOS resource forks to analyze structure
-		const relevantEntries = zipEntries.filter(
-			(entry) =>
-				!entry.isDirectory &&
-				!entry.entryName.startsWith('__MACOSX/') &&
-				!/\/\._/.test(entry.entryName) && // Files starting with ._ within subdirs
-				!entry.entryName.startsWith('._') // Files starting with ._ at root
-		);
+		const uploadPromises: Promise<any>[] = [];
+		const relevantEntries: { path: string; data: Uint8Array }[] = [];
+
+		// Filter out directories and macOS resource forks
+		for (const entryPath in unzipped) {
+			// fflate uses paths ending in / for directories
+			if (
+				entryPath.endsWith('/') ||
+				entryPath.startsWith('__MACOSX/') ||
+				/\/\._/.test(entryPath) || // Files starting with ._ within subdirs
+				entryPath.startsWith('._') // Files starting with ._ at root
+			) {
+				continue;
+			}
+			relevantEntries.push({ path: entryPath, data: unzipped[entryPath] });
+		}
 
 		if (relevantEntries.length === 0) {
 			console.warn(
@@ -122,11 +136,11 @@ export const POST = async ({ request }: RequestEvent) => {
 
 		// Determine common root path prefix
 		let commonPathPrefix = '';
-		const firstPath = relevantEntries[0].entryName;
+		const firstPath = relevantEntries[0].path;
 		const firstSlashIndex = firstPath.indexOf('/');
 		if (firstSlashIndex > 0) {
 			const potentialPrefix = firstPath.substring(0, firstSlashIndex + 1);
-			if (relevantEntries.every((entry) => entry.entryName.startsWith(potentialPrefix))) {
+			if (relevantEntries.every((entry) => entry.path.startsWith(potentialPrefix))) {
 				commonPathPrefix = potentialPrefix;
 				console.log(`[UPLOAD] Detected common root folder in zip: ${commonPathPrefix}`);
 			}
@@ -136,38 +150,29 @@ export const POST = async ({ request }: RequestEvent) => {
 		let foundRootIndexHtml = false;
 
 		console.log(
-			`[UPLOAD] Extracting ${zipEntries.length} entries from ${zipFile.name}` +
+			`[UPLOAD] Extracting ${Object.keys(unzipped).length} entries from ${zipFile.name}` + // Use Object.keys(unzipped).length for total
 				(commonPathPrefix ? ` (stripping prefix '${commonPathPrefix}')` : '') +
 				'...'
 		);
 
-		for (const entry of zipEntries) {
-			// Skip directories and macOS specific files
-			if (
-				entry.isDirectory ||
-				entry.entryName.startsWith('__MACOSX/') ||
-				/\/\._/.test(entry.entryName) ||
-				entry.entryName.startsWith('._')
-			) {
-				continue;
-			}
-
+		// Iterate through the filtered entries from fflate's output
+		for (const entry of relevantEntries) {
 			entryCount++;
-			let relativePath = entry.entryName;
+			let relativePath = entry.path;
 			if (commonPathPrefix && relativePath.startsWith(commonPathPrefix)) {
 				relativePath = relativePath.substring(commonPathPrefix.length);
 			}
 
-			// Skip if relative path is now empty (e.g., it was just the common prefix folder itself)
+			// Skip if relative path is now empty
 			if (!relativePath) {
-				entryCount--; // Don't count this as an uploaded file
+				entryCount--;
 				continue;
 			}
 
-			// Sanitize entry path just in case, although AdmZip usually handles this well
-			const safeEntryPath = relativePath.replace(/\.\./g, ''); // Basic path traversal prevention
+			// Sanitize entry path
+			const safeEntryPath = relativePath.replace(/\.\./g, '_'); // Basic path traversal prevention
 			const fullPath = `${safeGameName}/${safeEntryPath}`;
-			const entryData = entry.getData(); // Gets entry data as a Buffer
+			const entryData = entry.data; // Already a Uint8Array
 
 			// Determine Content-Type
 			const contentType = lookup(relativePath) || 'application/octet-stream';
@@ -181,7 +186,7 @@ export const POST = async ({ request }: RequestEvent) => {
 			const putCommand = new PutObjectCommand({
 				Bucket: bucketName,
 				Key: fullPath,
-				Body: entryData,
+				Body: entryData, // Pass Uint8Array directly
 				ContentType: contentType
 			});
 			uploadPromises.push(s3Client.send(putCommand));
@@ -249,13 +254,6 @@ export const POST = async ({ request }: RequestEvent) => {
 		// Log the stack trace if available
 		if (error instanceof Error && error.stack) {
 			console.error(error.stack);
-		}
-		// Check for AdmZip specific errors if needed
-		if (error.code === 'ERR_BAD_ARCHIVE') {
-			return json(
-				{ error: 'Failed to process zip file. It might be corrupted or invalid.' },
-				{ status: 400 }
-			);
 		}
 		return json({ error: `Internal Server Error: ${error.message || error}` }, { status: 500 });
 	}
